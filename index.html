@@ -1,0 +1,872 @@
+<!-- ... SECTION 5 & MAIN: Khai báo hàm enterGalaxyScene lên toàn cục -->
+    <script id="module-galaxy-js">
+        let galaxyInitialized = false;
+        let scene, camera, renderer, controls;
+        let centralPlanet, textRing1, textRing2, photoDiskGroup, starField, shootingStars = [];
+        let floatingHearts3DGroup;
+        let photoMeshes = [];
+        let raycaster = new THREE.Raycaster();
+        let mouse = new THREE.Vector2();
+        let cameraIntroProgress = 0;
+
+        // Khai báo hàm enterGalaxyScene lên window để tránh lỗi ReferenceError khi gán sự kiện ở main.js
+        window.enterGalaxyScene = function() {
+            const modal = document.getElementById('letter-modal');
+            const galaxySec = document.getElementById('scene-galaxy');
+
+            if (modal) modal.classList.remove('open');
+            if (galaxySec) galaxySec.classList.add('active');
+            initGalaxy3D();
+        };
+
+        // Tạo Texture Trái tim 3D phát sáng bay lơ lửng trong Vũ trụ Galaxy
+        function createHeart3DTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 128;
+            canvas.height = 128;
+            const ctx = canvas.getContext('2d');
+
+            ctx.shadowColor = '#ff4d79';
+            ctx.shadowBlur = 16;
+            ctx.fillStyle = '#ff5c8a';
+            ctx.beginPath();
+            ctx.moveTo(64, 106);
+            ctx.bezierCurveTo(64, 102, 16, 72, 16, 42);
+            ctx.bezierCurveTo(16, 22, 34, 14, 50, 22);
+            ctx.bezierCurveTo(58, 26, 64, 34, 64, 38);
+            ctx.bezierCurveTo(64, 34, 70, 26, 78, 22);
+            ctx.bezierCurveTo(94, 14, 112, 22, 112, 42);
+            ctx.bezierCurveTo(112, 72, 64, 102, 64, 106);
+            ctx.closePath();
+            ctx.fill();
+
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        // Hàm vẽ bộ tranh minh họa Thầy giáo Dũng & Học trò (phong cách Doraemon & lớp học giống hệt video)
+        function createClassroomIllustrationTextures() {
+            const textures = [];
+
+            // Nếu người dùng có tải ảnh riêng lên thì ưu tiên dùng
+            if (window.GIFT_CONFIG.customPhotoUrls && window.GIFT_CONFIG.customPhotoUrls.length > 0) {
+                const loader = new THREE.TextureLoader();
+                window.GIFT_CONFIG.customPhotoUrls.forEach(url => {
+                    const tex = loader.load(url);
+                    tex.userData = { imgUrl: url };
+                    textures.push(tex);
+                });
+            // 6 Cảnh lớp học Thầy Dũng & Tập thể học sinh lớp 12B
+            const scenes = [
+                { bg: '#bfe3db', chalkboard: true, teacherPose: 'smile', student: true, caption: 'Thầy Dũng & Lớp 12B' },
+                { bg: '#d4e6b5', chalkboard: true, teacherPose: 'point', student: false, caption: 'Bài học trên bảng xanh' },
+                { bg: '#f5d9b8', chalkboard: false, teacherPose: 'encourage', student: true, caption: 'Thầy Dũng ân cần khuyên bảo' },
+                { bg: '#c7dce8', chalkboard: true, teacherPose: 'read', student: true, caption: 'Kỷ niệm Tập thể 12B' },
+                { bg: '#e8d3e3', chalkboard: false, teacherPose: 'happy', student: true, caption: 'Nụ cười của Thầy Dũng' },
+                { bg: '#d8e8c8', chalkboard: true, teacherPose: 'wave', student: true, caption: '12B Tri ân Thầy Dũng 20/11' }
+            ];
+
+            scenes.forEach((sc, idx) => {
+                const canvas = document.createElement('canvas');
+                canvas.width = 320;
+                canvas.height = 220;
+                const ctx = canvas.getContext('2d');
+
+                // Bo góc khung ảnh
+                ctx.save();
+                roundRect(ctx, 4, 4, 312, 212, 22);
+                ctx.clip();
+
+                // Tường lớp học
+                ctx.fillStyle = sc.bg;
+                ctx.fillRect(0, 0, 320, 220);
+
+                // Bảng xanh lớp học ghi dòng chữ Tập thể lớp 12B tri ân Thầy Dũng
+                if (sc.chalkboard) {
+                    ctx.fillStyle = '#265c42';
+                    ctx.fillRect(20, 18, 280, 115);
+                    ctx.strokeStyle = '#a37046';
+                    ctx.lineWidth = 6;
+                    ctx.strokeRect(20, 18, 280, 115);
+
+                    // Chữ phấn trắng trên bảng
+                    ctx.fillStyle = 'rgba(255,255,255,0.92)';
+                    ctx.font = 'bold 13.5px Quicksand, sans-serif';
+                    ctx.fillText('20/11 - Lớp 12B Tri Ân Thầy Dũng', 32, 46);
+                    ctx.font = 'bold 11px Quicksand, sans-serif';
+                    ctx.fillStyle = 'rgba(255,235,180,0.9)';
+                    ctx.fillText('Người Gieo Mầm Xanh ❤️', 32, 66);
+                    ctx.fillStyle = 'rgba(255,255,255,0.75)';
+                    ctx.fillRect(32, 78, 85, 3);
+                }
+
+                // Vẽ Thầy giáo (Áo vest nâu/xanh, cà vạt, kính trắng, mái tóc rẽ ngôi kinh điển trong Doraemon)
+                const tx = sc.student ? 135 : 160;
+                const ty = 115;
+
+                // Thân áo vest
+                ctx.fillStyle = idx % 2 === 0 ? '#9c7a54' : '#3a88a8';
+                ctx.beginPath();
+                ctx.ellipse(tx, ty + 68, 48, 52, 0, Math.PI, 0, false);
+                ctx.fill();
+                ctx.lineWidth = 2.5;
+                ctx.strokeStyle = '#2d2d2d';
+                ctx.stroke();
+
+                // Áo sơ mi trắng & Cà vạt
+                ctx.fillStyle = '#ffffff';
+                ctx.beginPath();
+                ctx.moveTo(tx - 16, ty + 24);
+                ctx.lineTo(tx + 16, ty + 24);
+                ctx.lineTo(tx, ty + 62);
+                ctx.closePath();
+                ctx.fill();
+
+                ctx.fillStyle = '#2b4c7e';
+                ctx.beginPath();
+                ctx.moveTo(tx - 4, ty + 30);
+                ctx.lineTo(tx + 4, ty + 30);
+                ctx.lineTo(tx + 6, ty + 64);
+                ctx.lineTo(tx, ty + 70);
+                ctx.lineTo(tx - 6, ty + 64);
+                ctx.closePath();
+                ctx.fill();
+
+                // Khuôn mặt thầy giáo
+                ctx.fillStyle = '#fcd7b6';
+                ctx.beginPath();
+                ctx.ellipse(tx, ty, 34, 36, 0, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+
+                // Mái tóc đen của thầy
+                ctx.fillStyle = '#222222';
+                ctx.beginPath();
+                ctx.arc(tx, ty - 12, 34, Math.PI * 1.05, Math.PI * 1.95);
+                ctx.fill();
+
+                // Mắt kính chữ nhật trắng
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(tx - 22, ty - 12, 18, 13);
+                ctx.fillRect(tx + 4, ty - 12, 18, 13);
+                ctx.strokeRect(tx - 22, ty - 12, 18, 13);
+                ctx.strokeRect(tx + 4, ty - 12, 18, 13);
+                ctx.beginPath();
+                ctx.moveTo(tx - 4, ty - 6);
+                ctx.lineTo(tx + 4, ty - 6);
+                ctx.stroke();
+
+                // Mắt & Miệng cười ấm áp
+                ctx.fillStyle = '#111';
+                ctx.beginPath();
+                ctx.arc(tx - 13, ty - 5, 2.2, 0, Math.PI * 2);
+                ctx.arc(tx + 13, ty - 5, 2.2, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.fillStyle = '#e06d6d';
+                ctx.beginPath();
+                ctx.arc(tx, ty + 12, 11, 0, Math.PI);
+                ctx.fill();
+                ctx.stroke();
+
+                // Vẽ Cậu học trò (Nobita áo vàng) đứng bên cạnh thầy
+                if (sc.student) {
+                    const sx = 235;
+                    const sy = 142;
+
+                    // Áo vàng học trò
+                    ctx.fillStyle = '#f5c842';
+                    ctx.beginPath();
+                    ctx.ellipse(sx, sy + 55, 32, 42, 0, Math.PI, 0, false);
+                    ctx.fill();
+                    ctx.stroke();
+
+                    // Mặt học trò
+                    ctx.fillStyle = '#fcd7b6';
+                    ctx.beginPath();
+                    ctx.arc(sx, sy, 25, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.stroke();
+
+                    // Tóc học trò
+                    ctx.fillStyle = '#1f1f1f';
+                    ctx.beginPath();
+                    ctx.arc(sx, sy - 6, 25, Math.PI * 1.1, Math.PI * 1.95);
+                    ctx.fill();
+
+                    // Kính tròn học trò
+                    ctx.fillStyle = '#ffffff';
+                    ctx.beginPath();
+                    ctx.arc(sx - 9, sy - 2, 7, 0, Math.PI * 2);
+                    ctx.arc(sx + 9, sy - 2, 7, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.stroke();
+                }
+
+                // Viền sáng trắng bo góc ngoài bức ảnh
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+                ctx.lineWidth = 5;
+                roundRect(ctx, 4, 4, 312, 212, 22);
+                ctx.stroke();
+                ctx.restore();
+
+                const dataUrl = canvas.toDataURL('image/png');
+                const texture = new THREE.CanvasTexture(canvas);
+                texture.userData = { imgUrl: dataUrl };
+                textures.push(texture);
+            });
+
+            return textures;
+        }
+
+        function roundRect(ctx, x, y, w, h, r) {
+            ctx.beginPath();
+            ctx.moveTo(x + r, y);
+            ctx.lineTo(x + w - r, y);
+            ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+            ctx.lineTo(x + w, y + h - r);
+            ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+            ctx.lineTo(x + r, y + h);
+            ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+            ctx.lineTo(x, y + r);
+            ctx.quadraticCurveTo(x, y, x + r, y);
+            ctx.closePath();
+        }
+
+        // Tạo Texture chữ phát sáng cho 2 vành đai xoay quanh tinh cầu
+        function createRingTextTexture(textStr) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 2048;
+            canvas.height = 128;
+            const ctx = canvas.getContext('2d');
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            // Đường viền mảnh phát sáng của vành đai
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
+            ctx.fillRect(0, 18, canvas.width, 4);
+            ctx.fillRect(0, 106, canvas.width, 4);
+
+            ctx.font = 'bold 46px Quicksand, sans-serif';
+            ctx.fillStyle = '#ffffff';
+            ctx.shadowColor = '#ff85e4';
+            ctx.shadowBlur = 14;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+
+            const repeated = (textStr + "   •   ").repeat(4);
+            ctx.fillText(repeated, canvas.width / 2, canvas.height / 2);
+
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.wrapS = THREE.RepeatWrapping;
+            tex.repeat.set(2, 1);
+            return tex;
+        }
+
+        // Tạo đám mây tinh vân nhiều màu (Tím, Xanh lá, Vàng, Xanh dương, Hồng) giống video
+        function createNebulaClouds() {
+            const nebulaGroup = new THREE.Group();
+            const colors = [
+                { color: '#a838ff', x: -160, y: 85, z: -260, scale: 260 },
+                { color: '#29d659', x: 170, y: 95, z: -260, scale: 250 },
+                { color: '#d6a329', x: -180, y: -95, z: -270, scale: 260 },
+                { color: '#7e30ff', x: 145, y: -110, z: -250, scale: 240 },
+                { color: '#38b6ff', x: -20, y: 125, z: -280, scale: 230 },
+                { color: '#ff47b5', x: -85, y: 20, z: -220, scale: 210 }
+            ];
+
+            colors.forEach(nb => {
+                const canvas = document.createElement('canvas');
+                canvas.width = 256;
+                canvas.height = 256;
+                const ctx = canvas.getContext('2d');
+                const grad = ctx.createRadialGradient(128, 128, 8, 128, 128, 125);
+                grad.addColorStop(0, nb.color);
+                grad.addColorStop(0.45, nb.color + '66');
+                grad.addColorStop(1, 'rgba(0,0,0,0)');
+                ctx.fillStyle = grad;
+                ctx.fillRect(0, 0, 256, 256);
+
+                const mat = new THREE.SpriteMaterial({
+                    map: new THREE.CanvasTexture(canvas),
+                    transparent: true,
+                    opacity: 0.62,
+                    blending: THREE.AdditiveBlending,
+                    depthWrite: false
+                });
+                const sprite = new THREE.Sprite(mat);
+                sprite.position.set(nb.x, nb.y, nb.z);
+                sprite.scale.set(nb.scale, nb.scale, 1);
+                nebulaGroup.add(sprite);
+            });
+
+            return nebulaGroup;
+        }
+
+        // Khởi tạo Tinh cầu trung tâm màu hồng tím óng ánh giống 100% video
+        function createIridescentPlanetTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 512;
+            const ctx = canvas.getContext('2d');
+
+            const grad = ctx.createLinearGradient(0, 0, 512, 512);
+            grad.addColorStop(0, '#7bf0d9');
+            grad.addColorStop(0.3, '#e075ff');
+            grad.addColorStop(0.65, '#ff85c8');
+            grad.addColorStop(1, '#9d4edd');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, 512, 512);
+
+            // Vân sóng mềm trên bề mặt hành tinh
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+            ctx.lineWidth = 18;
+            for (let i = 0; i < 6; i++) {
+                ctx.beginPath();
+                ctx.arc(256, 256, 60 + i * 35, 0.3 * i, Math.PI + 0.4 * i);
+                ctx.stroke();
+            }
+
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        function initGalaxy3D() {
+            if (galaxyInitialized) {
+                cameraIntroProgress = 0;
+                return;
+            }
+            galaxyInitialized = true;
+
+            const container = document.getElementById('galaxy-canvas-container');
+            scene = new THREE.Scene();
+
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.5, 2000);
+            camera.position.set(0, 12, 68);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            container.appendChild(renderer.domElement);
+
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.minDistance = 24;
+            controls.maxDistance = 320;
+
+            // Ánh sáng
+            const ambient = new THREE.AmbientLight(0xffffff, 0.9);
+            scene.add(ambient);
+            const pointLight = new THREE.PointLight(0xff99e6, 1.5, 400);
+            pointLight.position.set(20, 30, 40);
+            scene.add(pointLight);
+
+            // 1. Tinh vân đa sắc phía sau
+            scene.add(createNebulaClouds());
+
+            // 2. Bầu trời ngàn sao lấp lánh
+            const starGeo = new THREE.BufferGeometry();
+            const starCount = 3200;
+            const starPos = new Float32Array(starCount * 3);
+            for (let i = 0; i < starCount * 3; i += 3) {
+                starPos[i] = (Math.random() - 0.5) * 900;
+                starPos[i + 1] = (Math.random() - 0.5) * 650;
+                starPos[i + 2] = (Math.random() - 0.5) * 900;
+            }
+            starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+            const starMat = new THREE.PointsMaterial({ color: 0xffffff, size: 1.15, transparent: true, opacity: 0.88 });
+            starField = new THREE.Points(starGeo, starMat);
+            scene.add(starField);
+
+            // 3. Tinh cầu trung tâm phát sáng (kèm vòng hào quang)
+            const planetGeo = new THREE.SphereGeometry(14, 64, 64);
+            const planetMat = new THREE.MeshStandardMaterial({
+                map: createIridescentPlanetTexture(),
+                roughness: 0.25,
+                metalness: 0.1,
+                emissive: 0x6b2178,
+                emissiveIntensity: 0.35
+            });
+            centralPlanet = new THREE.Mesh(planetGeo, planetMat);
+            scene.add(centralPlanet);
+
+            // Lớp viền phát sáng quanh tinh cầu
+            const haloGeo = new THREE.RingGeometry(14.3, 15.6, 64);
+            const haloMat = new THREE.MeshBasicMaterial({ color: 0xffd6f7, side: THREE.DoubleSide, transparent: true, opacity: 0.8 });
+            const haloMesh = new THREE.Mesh(haloGeo, haloMat);
+            centralPlanet.add(haloMesh);
+
+            // 4. Hai vành đai chữ 3D "Tri ân thầy cô" xoay chéo quanh tinh cầu
+            const ringGeo = new THREE.CylinderGeometry(19.5, 19.5, 2.2, 72, 1, true);
+            const ringMat1 = new THREE.MeshBasicMaterial({
+                map: createRingTextTexture(window.GIFT_CONFIG.planetRingText1),
+                side: THREE.DoubleSide,
+                transparent: true,
+                depthWrite: false
+            });
+            textRing1 = new THREE.Mesh(ringGeo, ringMat1);
+            textRing1.rotation.z = Math.PI * 0.18;
+            textRing1.rotation.x = Math.PI * 0.08;
+            scene.add(textRing1);
+
+            const ringGeo2 = new THREE.CylinderGeometry(22.2, 22.2, 2.0, 72, 1, true);
+            const ringMat2 = new THREE.MeshBasicMaterial({
+                map: createRingTextTexture(window.GIFT_CONFIG.planetRingText2),
+                side: THREE.DoubleSide,
+                transparent: true,
+                depthWrite: false
+            });
+            textRing2 = new THREE.Mesh(ringGeo2, ringMat2);
+            textRing2.rotation.z = -Math.PI * 0.25;
+            textRing2.rotation.x = Math.PI * 0.12;
+            scene.add(textRing2);
+
+            // 5. Đĩa ngân hà chứa hàng trăm bức ảnh kỷ niệm bay quanh tinh cầu
+            photoDiskGroup = new THREE.Group();
+            scene.add(photoDiskGroup);
+            rebuildGalaxyPhotos();
+
+            // 6. Các trái tim nhỏ 3D bay lơ lửng giữa không gian ngân hà
+            floatingHearts3DGroup = new THREE.Group();
+            const heartTex = createHeart3DTexture();
+            for (let h = 0; h < 95; h++) {
+                const hMat = new THREE.SpriteMaterial({
+                    map: heartTex,
+                    transparent: true,
+                    opacity: 0.78,
+                    blending: THREE.AdditiveBlending
+                });
+                const hSprite = new THREE.Sprite(hMat);
+                const hRadius = 22 + Math.random() * 140;
+                const hAngle = Math.random() * Math.PI * 2;
+                const hY = (Math.random() - 0.5) * 95;
+                const hScale = 1.6 + Math.random() * 2.4;
+                hSprite.position.set(Math.cos(hAngle) * hRadius, hY, Math.sin(hAngle) * hRadius);
+                hSprite.scale.set(hScale, hScale, 1);
+                hSprite.userData = {
+                    speedY: 0.06 + Math.random() * 0.1,
+                    swayOffset: Math.random() * Math.PI * 2,
+                    baseX: hSprite.position.x,
+                    baseZ: hSprite.position.z
+                };
+                floatingHearts3DGroup.add(hSprite);
+            }
+            scene.add(floatingHearts3DGroup);
+
+            // 7. Các mặt trăng nhỏ bay quanh không gian giống video
+            const moonColors = [0xffffff, 0xc084fc, 0xfbcfe8, 0xffffff];
+            for (let m = 0; m < 6; m++) {
+                const moon = new THREE.Mesh(
+                    new THREE.SphereGeometry(1.5 + Math.random() * 1.5, 24, 24),
+                    new THREE.MeshBasicMaterial({ color: moonColors[m % moonColors.length] })
+                );
+                const angle = (m / 6) * Math.PI * 2;
+                const dist = 55 + m * 22;
+                moon.position.set(Math.cos(angle) * dist, (Math.random() - 0.5) * 40, Math.sin(angle) * dist);
+                scene.add(moon);
+            }
+
+            // Sự kiện click vào bức ảnh trong vũ trụ 3D để xem rõ
+            renderer.domElement.addEventListener('pointerdown', onGalaxyPointerDown);
+            window.addEventListener('resize', onGalaxyResize);
+
+            animateGalaxy();
+        }
+
+        function rebuildGalaxyPhotos() {
+            if (!photoDiskGroup) return;
+            while (photoDiskGroup.children.length > 0) {
+                photoDiskGroup.remove(photoDiskGroup.children[0]);
+            }
+            photoMeshes = [];
+
+            const textures = createClassroomIllustrationTextures();
+            const cardGeo = new THREE.PlaneGeometry(4.8, 3.3);
+            const totalCards = 420; // Hàng trăm tấm ảnh kỷ niệm tạo thành dải ngân hà dày đặc như video
+
+            for (let i = 0; i < totalCards; i++) {
+                const tex = textures[i % textures.length];
+                const mat = new THREE.MeshBasicMaterial({
+                    map: tex,
+                    side: THREE.DoubleSide,
+                    transparent: true
+                });
+
+                const mesh = new THREE.Mesh(cardGeo, mat);
+
+                // Phân bố theo đĩa xoắn ốc xung quanh tinh cầu trung tâm
+                const radius = 24 + Math.pow(Math.random(), 0.85) * 145;
+                const theta = Math.random() * Math.PI * 2;
+                const verticalSpread = (Math.random() - 0.5) * (6 + radius * 0.06);
+
+                mesh.position.set(
+                    Math.cos(theta) * radius,
+                    verticalSpread,
+                    Math.sin(theta) * radius
+                );
+
+                // Lưu tốc độ quay quỹ đạo riêng của từng tấm ảnh
+                mesh.userData = {
+                    radius: radius,
+                    theta: theta,
+                    speed: (0.0015 + Math.random() * 0.0025) * (55 / radius),
+                    yBase: verticalSpread,
+                    floatOffset: Math.random() * Math.PI * 2,
+                    imgUrl: tex.userData ? tex.userData.imgUrl : ''
+                };
+
+                photoDiskGroup.add(mesh);
+                photoMeshes.push(mesh);
+            }
+        }
+
+        function spawnShootingStar() {
+            if (!scene) return;
+            const points = [
+                new THREE.Vector3(0, 0, 0),
+                new THREE.Vector3(-28, -16, 0)
+            ];
+            const geo = new THREE.BufferGeometry().setFromPoints(points);
+            const mat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9 });
+            const line = new THREE.Line(geo, mat);
+
+            line.position.set(
+                (Math.random() - 0.3) * 260,
+                60 + Math.random() * 90,
+                -80 - Math.random() * 120
+            );
+            scene.add(line);
+            shootingStars.push(line);
+        }
+
+        let pointerDownPos = { x: 0, y: 0 };
+        function onGalaxyPointerDown(e) {
+            pointerDownPos = { x: e.clientX, y: e.clientY };
+            const hint = document.getElementById('galaxy-hint');
+            if (hint) hint.style.opacity = '0';
+
+            const onUp = (upEvt) => {
+                window.removeEventListener('pointerup', onUp);
+                const dx = Math.abs(upEvt.clientX - pointerDownPos.x);
+                const dy = Math.abs(upEvt.clientY - pointerDownPos.y);
+                if (dx < 6 && dy < 6) {
+                    checkPhotoCardClick(upEvt);
+                }
+            };
+            window.addEventListener('pointerup', onUp);
+        }
+
+        function checkPhotoCardClick(e) {
+            mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+            raycaster.setFromCamera(mouse, camera);
+
+            const intersects = raycaster.intersectObjects(photoMeshes);
+            if (intersects.length > 0) {
+                const hit = intersects[0].object;
+                if (hit.userData && hit.userData.imgUrl) {
+                    const lb = document.getElementById('photo-lightbox');
+                    const lbImg = document.getElementById('lightbox-img');
+                    lbImg.src = hit.userData.imgUrl;
+                    lb.classList.add('show');
+                }
+            }
+        }
+
+        function onGalaxyResize() {
+            if (!camera || !renderer) return;
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animateGalaxy() {
+            requestAnimationFrame(animateGalaxy);
+
+            // Tự động lướt camera qua dải ngân hà như trong video lúc mới vào
+            if (cameraIntroProgress < 1) {
+                cameraIntroProgress += 0.0022;
+                const t = Math.min(cameraIntroProgress, 1);
+                // Chuyển động mượt từ gần tinh cầu ra xa rồi nghiêng góc nhìn xuống đĩa ngân hà
+                if (t < 0.5) {
+                    const p = t * 2;
+                    camera.position.z = 52 + Math.sin(p * Math.PI) * 58;
+                    camera.position.y = 6 + p * 18;
+                }
+            }
+
+            if (centralPlanet) {
+                centralPlanet.rotation.y += 0.003;
+            }
+            if (textRing1) {
+                textRing1.rotation.y -= 0.008;
+            }
+            if (textRing2) {
+                textRing2.rotation.y += 0.006;
+            }
+
+            // Cho các bức ảnh kỷ niệm bay quanh quỹ đạo và luôn hướng mặt về phía người xem
+            const time = performance.now() * 0.001;
+            for (let i = 0; i < photoMeshes.length; i++) {
+                const m = photoMeshes[i];
+                const ud = m.userData;
+                ud.theta += ud.speed;
+                m.position.x = Math.cos(ud.theta) * ud.radius;
+                m.position.z = Math.sin(ud.theta) * ud.radius;
+                m.position.y = ud.yBase + Math.sin(time * 1.5 + ud.floatOffset) * 0.6;
+                m.lookAt(camera.position);
+            }
+
+            // Chuyển động bay lên nhẹ nhàng của các trái tim 3D giữa không gian
+            if (floatingHearts3DGroup) {
+                floatingHearts3DGroup.children.forEach(hSprite => {
+                    hSprite.position.y += hSprite.userData.speedY;
+                    hSprite.position.x = hSprite.userData.baseX + Math.sin(time * 1.8 + hSprite.userData.swayOffset) * 2.2;
+                    if (hSprite.position.y > 55) {
+                        hSprite.position.y = -55;
+                    }
+                });
+            }
+
+            // Sao băng bay chéo qua bầu trời
+            if (Math.random() < 0.018) {
+                spawnShootingStar();
+            }
+            for (let i = shootingStars.length - 1; i >= 0; i--) {
+                const st = shootingStars[i];
+                st.position.x -= 3.6;
+                st.position.y -= 2.1;
+                st.material.opacity -= 0.015;
+                if (st.material.opacity <= 0) {
+                    scene.remove(st);
+                    shootingStars.splice(i, 1);
+                }
+            }
+
+            if (controls) controls.update();
+            if (renderer && scene && camera) renderer.render(scene, camera);
+        }
+    </script>
+
+    <!-- =====================================================================
+         [MODULE 6: main.js] - KẾT NỐI SỰ KIỆN & TRÌNH XUẤT FILE NHỎ
+    ====================================================================== -->
+    <script id="module-main-js">
+        // Khai báo hàm renderBouquetQRCode lên phạm vi toàn cục
+        window.renderBouquetQRCode = function() {
+            const qrContainer = document.getElementById('qrcode-box');
+            if (!qrContainer) return;
+            qrContainer.innerHTML = '';
+            
+            const qrUrl = (window.GIFT_CONFIG && window.GIFT_CONFIG.qrCodeLink) ? window.GIFT_CONFIG.qrCodeLink : window.location.href;
+            
+            // Sử dụng thư viện qrcode.min.js để tạo mã QR chuẩn 100% giống video
+            if (typeof QRCode !== 'undefined') {
+                try {
+                    new QRCode(qrContainer, {
+                        text: qrUrl,
+                        width: 95,
+                        height: 95,
+                        colorDark: "#2c2c2c",
+                        colorLight: "#ffffff",
+                        correctLevel: QRCode.CorrectLevel.M
+                    });
+                } catch (err) {
+                    qrContainer.innerHTML = `<img src="https://api.qrserver.com/v1/create-qr-code/?size=95x95&data=${encodeURIComponent(qrUrl)}" alt="QR Code" class="w-full h-full rounded-md">`;
+                }
+            } else {
+                qrContainer.innerHTML = `<img src="https://api.qrserver.com/v1/create-qr-code/?size=95x95&data=${encodeURIComponent(qrUrl)}" alt="QR Code" class="w-full h-full rounded-md">`;
+            }
+        };
+
+        window.addEventListener('DOMContentLoaded', () => {
+            // Khởi tạo mã QR trong bó hoa
+            window.renderBouquetQRCode();
+
+            // Gán sự kiện chạm vào bó hoa hoặc dòng chữ để sang Cảnh 2
+            document.getElementById('bouquet-trigger').addEventListener('click', enterEnvelopeScene);
+            document.getElementById('touch-label').addEventListener('click', enterEnvelopeScene);
+
+            // Phóng to xem mã QR trong bó hoa
+            document.getElementById('toggle-qr-zoom-btn').addEventListener('click', (e) => {
+                e.stopPropagation();
+                document.getElementById('qr-badge-container').classList.toggle('zoom-qr');
+            });
+
+            // Sự kiện nhấn vào phong bì / tấm thiệp "Mở thư" để sang Cảnh 3
+            document.getElementById('open-letter-trigger').addEventListener('click', openLetterModal);
+
+            // Sự kiện nhấn nút X hoặc nút "Khám phá Vũ trụ Tri Ân 3D" để sang Cảnh 4 (Gọi trực tiếp window.enterGalaxyScene)
+            document.getElementById('close-letter-to-galaxy').addEventListener('click', window.enterGalaxyScene);
+            document.getElementById('enter-galaxy-btn').addEventListener('click', window.enterGalaxyScene);
+
+            // Nút quay lại xem thư từ vũ trụ 3D
+            document.getElementById('back-to-letter-btn').addEventListener('click', () => {
+                document.getElementById('scene-galaxy').classList.remove('active');
+            });
+
+            // Nút bật/tắt tiếng ở góc trên phải
+            document.getElementById('audio-toggle-btn').addEventListener('click', () => {
+                const muted = window.bgMusic.toggleMute();
+                document.getElementById('icon-sound-on').classList.toggle('hidden', muted);
+                document.getElementById('icon-sound-off').classList.toggle('hidden', !muted);
+            });
+
+            // Nút Ẩn/Hiện lời bài hát Karaoke ngay trên góc đĩa nhạc
+            document.getElementById('toggle-lyrics-btn').addEventListener('click', () => {
+                const shown = window.bgMusic.toggleLyricsDisplay();
+                document.getElementById('toggle-lyrics-btn').textContent = shown ? 'Lời hát: Bật' : 'Lời hát: Tắt';
+            });
+
+            // Nút tải nhanh file MP3 bài hát có giọng hát ngay trên thanh đĩa nhạc
+            document.getElementById('quick-mp3-upload').addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                window.GIFT_CONFIG.customMusicUrl = URL.createObjectURL(file);
+                document.getElementById('song-title-display').textContent = '🎵 ' + file.name.replace(/\.[^/.]+$/, "");
+                window.bgMusic.start();
+            });
+
+            // Đóng lightbox xem ảnh
+            document.getElementById('close-lightbox-btn').addEventListener('click', () => {
+                document.getElementById('photo-lightbox').classList.remove('show');
+            });
+            document.getElementById('photo-lightbox').addEventListener('click', (e) => {
+                if (e.target.id === 'photo-lightbox') {
+                    e.currentTarget.classList.remove('show');
+                }
+            });
+
+            // --- XỬ LÝ BẢNG TÙY CHỈNH & QUẢN LÝ FILE CON ---
+            const editorModal = document.getElementById('project-editor-modal');
+            const openEditorBtn = document.getElementById('open-editor-btn');
+            const closeEditorBtn = document.getElementById('close-editor-btn');
+
+            openEditorBtn.addEventListener('click', () => {
+                document.getElementById('input-qr-link').value = window.GIFT_CONFIG.qrCodeLink;
+                document.getElementById('input-letter-title').value = window.GIFT_CONFIG.letterTitle;
+                document.getElementById('input-letter-body').value = window.GIFT_CONFIG.letterParagraphs.join('\n');
+                document.getElementById('input-ring-text').value = window.GIFT_CONFIG.planetRingText1;
+                document.getElementById('input-song-lyrics').value = (window.GIFT_CONFIG.songLyrics || []).join('\n');
+                editorModal.classList.remove('hidden');
+                editorModal.classList.add('flex');
+            });
+
+            closeEditorBtn.addEventListener('click', () => {
+                editorModal.classList.add('hidden');
+                editorModal.classList.remove('flex');
+            });
+
+            // Chuyển tab trong trình chỉnh sửa
+            document.querySelectorAll('.editor-tab').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('.editor-tab').forEach(b => {
+                        b.classList.remove('bg-white', 'text-[#b04a4a]', 'border', 'border-b-0', 'border-gray-200');
+                        b.classList.add('text-gray-600');
+                    });
+                    btn.classList.add('bg-white', 'text-[#b04a4a]', 'border', 'border-b-0', 'border-gray-200');
+                    const target = btn.getAttribute('data-tab');
+                    document.getElementById('tab-quick').classList.toggle('hidden', target !== 'tab-quick');
+                    document.getElementById('tab-files').classList.toggle('hidden', target !== 'tab-files');
+                });
+            });
+
+            // Xử lý khi người dùng chọn tải ảnh kỷ niệm riêng từ máy lên
+            document.getElementById('input-custom-photos').addEventListener('change', (e) => {
+                const files = Array.from(e.target.files);
+                if (!files.length) return;
+                const urls = files.map(file => URL.createObjectURL(file));
+                window.GIFT_CONFIG.customPhotoUrls = urls;
+                if (galaxyInitialized) {
+                    rebuildGalaxyPhotos();
+                }
+            });
+
+            // Xử lý khi người dùng chọn file MP3 bài hát từ máy
+            document.getElementById('input-custom-audio').addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                window.GIFT_CONFIG.customMusicUrl = URL.createObjectURL(file);
+                document.getElementById('song-title-display').textContent = '🎵 ' + file.name.replace(/\.[^/.]+$/, "");
+                window.bgMusic.start();
+            });
+
+            // Lưu thay đổi cấu hình
+            document.getElementById('save-config-btn').addEventListener('click', () => {
+                window.GIFT_CONFIG.qrCodeLink = document.getElementById('input-qr-link').value.trim() || window.location.href;
+                window.GIFT_CONFIG.letterTitle = document.getElementById('input-letter-title').value.trim();
+                window.GIFT_CONFIG.letterParagraphs = document.getElementById('input-letter-body').value.split('\n').filter(l => l.trim() !== '');
+                window.GIFT_CONFIG.planetRingText1 = document.getElementById('input-ring-text').value;
+                const updatedLyrics = document.getElementById('input-song-lyrics').value.split('\n').filter(l => l.trim() !== '');
+                if (updatedLyrics.length > 0) {
+                    window.GIFT_CONFIG.songLyrics = updatedLyrics;
+                    window.bgMusic.updateLyricBanner(0);
+                }
+
+                // Cập nhật lại giao diện ngay lập tức
+                renderBouquetQRCode();
+                document.getElementById('card-title-preview').textContent = window.GIFT_CONFIG.letterTitle;
+                if (galaxyInitialized && textRing1) {
+                    textRing1.material.map = createRingTextTexture(window.GIFT_CONFIG.planetRingText1);
+                    textRing1.material.needsUpdate = true;
+                }
+
+                editorModal.classList.add('hidden');
+                editorModal.classList.remove('flex');
+            });
+        });
+
+        // Chuyển nhanh giữa các cảnh để kiểm tra
+        window.jumpToScene = function(sceneNum) {
+            const editorModal = document.getElementById('project-editor-modal');
+            editorModal.classList.add('hidden');
+            editorModal.classList.remove('flex');
+
+            const s1 = document.getElementById('scene-bouquet');
+            const s2 = document.getElementById('scene-envelope');
+            const s3 = document.getElementById('letter-modal');
+            const s4 = document.getElementById('scene-galaxy');
+
+            s3.classList.remove('open');
+            s4.classList.remove('active');
+
+            if (sceneNum === 1) {
+                s1.style.opacity = '1';
+                s1.style.pointerEvents = 'auto';
+                s2.classList.remove('active');
+                setMidAirHeartsActive(false); // Bước 1 không có trái tim bay
+            } else if (sceneNum === 2) {
+                enterEnvelopeScene();
+            } else if (sceneNum === 4) {
+                s1.style.opacity = '0';
+                s1.style.pointerEvents = 'none';
+                s2.classList.add('active');
+                setMidAirHeartsActive(true);
+                enterGalaxyScene();
+            }
+        };
+
+        // Hàm xuất từng file nhỏ bên trong ra máy tính để dễ sửa chữa bằng VS Code
+        window.downloadSubFile = function(fileName) {
+            let content = '';
+            if (fileName === 'config.js') {
+                content = `window.GIFT_CONFIG = ${JSON.stringify(window.GIFT_CONFIG, null, 4)};`;
+            } else if (fileName === 'style.css') {
+                content = document.getElementById('module-style-css').innerHTML.trim();
+            } else if (fileName === 'envelope.js') {
+                content = document.getElementById('module-envelope-js').innerHTML.trim();
+            } else if (fileName === 'galaxy.js') {
+                content = document.getElementById('module-galaxy-js').innerHTML.trim();
+            } else if (fileName === 'lyrics.js') {
+                content = document.getElementById('module-audio-js').innerHTML.trim();
+            }
+
+            const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = fileName;
+            a.click();
+            URL.revokeObjectURL(url);
+        };
+    </script>
+</body>
+</html>
